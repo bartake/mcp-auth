@@ -1,0 +1,21 @@
+{
+  "name": "mcp-auth-example",
+  "version": "1.0.0",
+  "description": "MCP server authentication example: User login → OAuth → JWT → MCP verifies → Context on tools → Downstream APIs",
+  "type": "module",
+  "scripts": {
+    "auth": "node auth-service.js",
+    "mcp": "node mcp-server.js",
+    "api": "node downstream-api.js",
+    "agent": "node agent.js",
+    "start": "concurrently \"node auth-service.js\" \"node mcp-server.js\" \"node downstream-api.js\"",
+    "ui": "node ui-server.js",
+    "start:full": "concurrently \"node auth-service.js\" \"node mcp-server.js\" \"node downstream-api.js\" \"node ui-server.js\"",
+    "demo": "node run-demo.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "jsonwebtoken": "^9.0.2",
+    "concurrently": "^9.0.1"
+  }
+}
