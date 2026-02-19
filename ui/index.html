@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MCP Auth Flow — Visualization</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #0f172a;
+      --bg-card: #1e293b;
+      --border: #334155;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --accent: #0d9488;
+      --accent-light: #2dd4bf;
+      --success: #22c55e;
+      --error: #ef4444;
+      --warning: #f59e0b;
+    }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      min-height: 100vh;
+      color: var(--text);
+      padding: 2rem;
+      line-height: 1.5;
+    }
+    .container { max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 1.75rem; margin-bottom: 0.5rem; color: var(--text); }
+    .subtitle { color: var(--text-muted); margin-bottom: 2rem; font-size: 0.95rem; }
+
+    .flow {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .flow-step {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      transition: all 0.25s;
+    }
+    .flow-step .num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--border);
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .flow-step.active .num { background: var(--accent); color: var(--bg); }
+    .flow-step.done .num { background: var(--success); color: white; }
+    .flow-step.error .num { background: var(--error); color: white; }
+    .flow-step .label { flex: 1; font-size: 0.95rem; }
+    .flow-step .detail { font-size: 0.8rem; color: var(--text-muted); }
+
+    .scenarios {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .scenario-card {
+      background: var(--bg-card);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .scenario-card:hover { border-color: var(--accent); }
+    .scenario-card.selected { border-color: var(--accent); background: rgba(13, 148, 136, 0.1); }
+    .scenario-card h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
+    .scenario-card .roles {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+    .scenario-card .badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      margin-right: 0.25rem;
+      margin-top: 0.25rem;
+    }
+    .scenario-card .badge.admin { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+    .scenario-card .badge.reader { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+    .scenario-card .badge.none { background: rgba(148, 163, 184, 0.2); color: var(--text-muted); }
+
+    .actions { margin-bottom: 2rem; }
+    .btn {
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      border: none;
+      background: var(--accent);
+      color: var(--bg);
+      transition: background 0.2s;
+    }
+    .btn:hover { background: var(--accent-light); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .results {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .results-header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .results-body { padding: 1.25rem; }
+    .result-section {
+      margin-bottom: 1.5rem;
+    }
+    .result-section:last-child { margin-bottom: 0; }
+    .result-section h4 {
+      font-size: 0.85rem;
+      color: var(--accent-light);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+    }
+    .result-section pre {
+      background: #0f172a;
+      border-radius: 8px;
+      padding: 1rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      overflow-x: auto;
+      color: var(--text-muted);
+    }
+    .result-section pre.success { border-left: 4px solid var(--success); }
+    .result-section pre.error { border-left: 4px solid var(--error); }
+    .curl-label { font-size: 0.75rem; color: var(--accent-light); margin-bottom: 0.25rem; }
+    .curl-block { margin-bottom: 1.25rem; }
+    .curl-block:last-child { margin-bottom: 0; }
+    .curl-wrap { position: relative; }
+    .copy-btn {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      font-size: 0.7rem;
+      padding: 0.25rem 0.5rem;
+      background: var(--border);
+      color: var(--text-muted);
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .copy-btn:hover { background: var(--accent); color: var(--bg); }
+    .empty-state {
+      color: var(--text-muted);
+      font-style: italic;
+      padding: 2rem;
+      text-align: center;
+    }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 1rem;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+    }
+    .status-dot.ready { background: var(--success); }
+    .status-dot.error { background: var(--error); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>MCP Auth Flow Visualization</h1>
+    <p class="subtitle">User login → OAuth → JWT → MCP verifies → Context on tools → Downstream APIs
+      <a href="/docs" style="margin-left:1rem;color:var(--accent-light);text-decoration:none;font-size:0.9rem;">How it works →</a>
+    </p>
+
+    <div class="status-bar" id="statusBar">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">Select a scenario and run to start</span>
+    </div>
+
+    <div class="flow" id="flow">
+      <div class="flow-step" data-step="1">
+        <span class="num">1</span>
+        <span class="label">User login → OAuth</span>
+        <span class="detail" id="step1Detail">—</span>
+      </div>
+      <div class="flow-step" data-step="2">
+        <span class="num">2</span>
+        <span class="label">Agent receives JWT</span>
+        <span class="detail" id="step2Detail">—</span>
+      </div>
+      <div class="flow-step" data-step="3">
+        <span class="num">3</span>
+        <span class="label">JWT passed to MCP server</span>
+        <span class="detail" id="step3Detail">—</span>
+      </div>
+      <div class="flow-step" data-step="4">
+        <span class="num">4</span>
+        <span class="label">MCP verifies + extracts roles</span>
+        <span class="detail" id="step4Detail">—</span>
+      </div>
+      <div class="flow-step" data-step="5">
+        <span class="num">5</span>
+        <span class="label">Context attached to tool calls</span>
+        <span class="detail" id="step5Detail">—</span>
+      </div>
+      <div class="flow-step" data-step="6">
+        <span class="num">6</span>
+        <span class="label">Downstream APIs use scoped tokens</span>
+        <span class="detail" id="step6Detail">—</span>
+      </div>
+    </div>
+
+    <h2 style="font-size: 1.1rem; margin-bottom: 1rem;">Scenarios</h2>
+    <div class="scenarios" id="scenarios">
+      <div class="scenario-card selected" data-user="alice">
+        <h3>Alice</h3>
+        <div class="roles">admin + reader</div>
+        <span class="badge admin">admin</span>
+        <span class="badge reader">reader</span>
+        <div style="font-size: 0.8rem; color: var(--success); margin-top: 0.5rem;">Full access</div>
+      </div>
+      <div class="scenario-card" data-user="bob">
+        <h3>Bob</h3>
+        <div class="roles">reader only</div>
+        <span class="badge reader">reader</span>
+        <div style="font-size: 0.8rem; color: var(--accent-light); margin-top: 0.5rem;">Reader data</div>
+      </div>
+      <div class="scenario-card" data-user="charlie">
+        <h3>Charlie</h3>
+        <div class="roles">no roles</div>
+        <span class="badge none">none</span>
+        <div style="font-size: 0.8rem; color: var(--warning); margin-top: 0.5rem;">403 on /data</div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn" id="runBtn">Run Scenario</button>
+    </div>
+
+    <div class="results">
+      <div class="results-header">Results</div>
+      <div class="results-body" id="resultsBody">
+        <div class="empty-state">Run a scenario to see the flow results</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let selectedUser = 'alice';
+
+    document.querySelectorAll('.scenario-card').forEach((card) => {
+      card.addEventListener('click', () => {
+        document.querySelectorAll('.scenario-card').forEach((c) => c.classList.remove('selected'));
+        card.classList.add('selected');
+        selectedUser = card.dataset.user;
+      });
+    });
+
+    function setStep(step, state, detail = '') {
+      const el = document.querySelector(`.flow-step[data-step="${step}"]`);
+      if (!el) return;
+      el.classList.remove('active', 'done', 'error');
+      if (state) el.classList.add(state);
+      const detailEl = document.getElementById(`step${step}Detail`);
+      if (detailEl) detailEl.textContent = detail;
+    }
+
+    function resetFlow() {
+      for (let i = 1; i <= 6; i++) setStep(i, null, '—');
+    }
+
+    async function runScenario() {
+      const btn = document.getElementById('runBtn');
+      btn.disabled = true;
+      resetFlow();
+
+      const statusDot = document.getElementById('statusDot');
+      const statusText = document.getElementById('statusText');
+      statusDot.className = 'status-dot';
+      statusText.textContent = `Running as ${selectedUser}...`;
+
+      const results = { user: selectedUser, steps: [] };
+      let token = null;
+      let sessionId = null;
+
+      try {
+        setStep(1, 'active', 'Logging in...');
+        const loginRes = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: selectedUser, password: 'pass123' }),
+        });
+        const loginData = await loginRes.json();
+        if (!loginRes.ok) throw new Error(loginData.error || 'Login failed');
+        token = loginData.access_token;
+        setStep(1, 'done', `JWT received`);
+        results.steps.push({ step: 1, type: 'login', data: { token: token.slice(0, 50) + '...' } });
+
+        setStep(2, 'active', 'Agent has JWT');
+        setStep(2, 'done', 'Ready');
+        setStep(3, 'active', 'Connecting to MCP...');
+
+        const initRes = await fetch('/api/mcp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            body: {
+              jsonrpc: '2.0',
+              id: 1,
+              method: 'initialize',
+              params: {
+                protocolVersion: '2024-11-05',
+                capabilities: {},
+                clientInfo: { name: 'ui-demo', version: '1.0.0' },
+              },
+            },
+            authorization: `Bearer ${token}`,
+          }),
+        });
+        const initData = await initRes.json();
+        if (initData.error) throw new Error(initData.error.message || 'MCP init failed');
+        sessionId = initData._sessionId;
+        setStep(3, 'done', 'Connected');
+        setStep(4, 'active', 'Verifying JWT...');
+        setStep(4, 'done', 'Roles extracted');
+
+        setStep(5, 'active', 'Calling get_user_info...');
+        const userRes = await fetch('/api/mcp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            body: {
+              jsonrpc: '2.0',
+              id: 2,
+              method: 'tools/call',
+              params: { name: 'get_user_info', arguments: {} },
+            },
+            authorization: `Bearer ${token}`,
+            sessionId,
+          }),
+        });
+        const userData = await userRes.json();
+        const userInfo = userData.result?.content?.[0]?.text || JSON.stringify(userData.result);
+        setStep(5, 'done', 'Context attached');
+        results.steps.push({ step: 5, type: 'userInfo', data: userInfo });
+
+        setStep(6, 'active', 'Calling downstream API...');
+        const dataRes = await fetch('/api/mcp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            body: {
+              jsonrpc: '2.0',
+              id: 3,
+              method: 'tools/call',
+              params: { name: 'fetch_downstream_data', arguments: { endpoint: 'data' } },
+            },
+            authorization: `Bearer ${token}`,
+            sessionId,
+          }),
+        });
+        const dataResult = await dataRes.json();
+        const downstreamData = dataResult.result?.content?.[0]?.text || JSON.stringify(dataResult.result);
+        setStep(6, 'done', 'Scoped access');
+        results.steps.push({ step: 6, type: 'downstream', data: downstreamData });
+
+        statusDot.className = 'status-dot ready';
+        statusText.textContent = `Completed as ${selectedUser}`;
+
+        const { html: curlSection, copyable: curlCopyable } = buildCurlSection(token, sessionId, selectedUser, loginData, initData, userData, dataResult);
+        document.getElementById('resultsBody').innerHTML = `
+          <div class="result-section">
+            <h4>User Context (from JWT)</h4>
+            <pre class="success">${escapeHtml(userInfo)}</pre>
+          </div>
+          <div class="result-section">
+            <h4>Downstream API Response</h4>
+            <pre class="${dataResult.error ? 'error' : 'success'}">${escapeHtml(downstreamData)}</pre>
+          </div>
+          <div class="result-section">
+            <h4>API Request/Response (curl format)</h4>
+            ${curlSection}
+          </div>
+        `;
+        document.querySelectorAll('.copy-curl').forEach((btn, i) => {
+          btn.onclick = () => {
+            navigator.clipboard.writeText(curlCopyable[i]);
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = 'Copy', 1500);
+          };
+        });
+      } catch (err) {
+        statusDot.className = 'status-dot error';
+        statusText.textContent = `Error: ${err.message}`;
+        document.querySelectorAll('.flow-step.active').forEach((s) => {
+          s.classList.remove('active');
+          s.classList.add('error');
+        });
+        document.getElementById('resultsBody').innerHTML = `
+          <div class="result-section">
+            <h4>Error</h4>
+            <pre class="error">${escapeHtml(err.message)}</pre>
+          </div>
+          <div class="empty-state" style="font-style: normal; padding: 1rem 0;">
+            Make sure services are running: npm start
+          </div>
+        `;
+      }
+      btn.disabled = false;
+    }
+
+    function escapeHtml(s) {
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    function buildCurlSection(token, sessionId, user, loginData, initData, userData, dataResult) {
+      const base = 'http://127.0.0.1';
+
+      const curls = [
+        {
+          label: '1. Login (POST /login)',
+          req: `curl -X POST ${base}:4000/login \\\n  -H "Content-Type: application/json" \\\n  -d '{"username":"${user}","password":"pass123"}'`,
+          res: JSON.stringify(loginData, null, 2),
+        },
+        {
+          label: '2. MCP Initialize (POST /mcp)',
+          req: `curl -X POST ${base}:4001/mcp \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer <TOKEN>" \\\n  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"demo","version":"1.0.0"}}}'`,
+          res: JSON.stringify({ result: initData.result, _sessionId: initData._sessionId }, null, 2),
+        },
+        {
+          label: '3. MCP tools/call get_user_info',
+          req: `curl -X POST ${base}:4001/mcp \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer <TOKEN>" \\\n  -H "Mcp-Session-Id: <SESSION_ID>" \\\n  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_user_info","arguments":{}}}'`,
+          res: JSON.stringify(userData, null, 2),
+        },
+        {
+          label: '4. MCP tools/call fetch_downstream_data',
+          req: `curl -X POST ${base}:4001/mcp \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer <TOKEN>" \\\n  -H "Mcp-Session-Id: <SESSION_ID>" \\\n  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"fetch_downstream_data","arguments":{"endpoint":"data"}}}'`,
+          res: JSON.stringify(dataResult, null, 2),
+        },
+        {
+          label: '5. Downstream API (GET /data)',
+          req: `curl -X GET ${base}:4002/data \\\n  -H "Authorization: Bearer <TOKEN>"`,
+          res: dataResult.result?.content?.[0]?.text || JSON.stringify(dataResult, null, 2),
+        },
+      ];
+
+      const copyable = [
+        `curl -X POST ${base}:4000/login -H "Content-Type: application/json" -d '{"username":"${user}","password":"pass123"}'`,
+        `curl -s -X POST ${base}:4001/mcp -H "Content-Type: application/json" -H "Authorization: Bearer ${token}" -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"demo","version":"1.0.0"}}}'`,
+        `curl -s -X POST ${base}:4001/mcp -H "Content-Type: application/json" -H "Authorization: Bearer ${token}" -H "Mcp-Session-Id: ${sessionId || ''}" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_user_info","arguments":{}}}'`,
+        `curl -s -X POST ${base}:4001/mcp -H "Content-Type: application/json" -H "Authorization: Bearer ${token}" -H "Mcp-Session-Id: ${sessionId || ''}" -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"fetch_downstream_data","arguments":{"endpoint":"data"}}}'`,
+        `curl -s -X GET ${base}:4002/data -H "Authorization: Bearer ${token}"`,
+      ];
+
+      const html = curls.map((c) => `
+        <div class="curl-block">
+          <div class="curl-label">${escapeHtml(c.label)}</div>
+          <div class="curl-wrap">
+            <pre style="margin:0.25rem 0;padding-right:4rem;">${escapeHtml(c.req)}</pre>
+            <button class="copy-btn copy-curl">Copy</button>
+          </div>
+          <div class="curl-label" style="margin-top:0.5rem;">Response:</div>
+          <pre>${escapeHtml(c.res)}</pre>
+        </div>
+      `).join('');
+      return { html, copyable };
+    }
+
+    document.getElementById('runBtn').addEventListener('click', runScenario);
+  </script>
+</body>
+</html>

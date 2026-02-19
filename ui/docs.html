@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>How It Works — MCP Auth Example</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #0f172a;
+      --bg-card: #1e293b;
+      --border: #334155;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --accent: #0d9488;
+      --accent-light: #2dd4bf;
+    }
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); min-height: 100vh; color: var(--text); line-height: 1.6; }
+    .container { max-width: 800px; margin: 0 auto; padding: 2rem; }
+    .nav { margin-bottom: 2rem; }
+    .nav a {
+      color: var(--accent-light);
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+    .nav a:hover { text-decoration: underline; }
+    h1 { font-size: 1.75rem; margin-bottom: 0.5rem; }
+    .lead { color: var(--text-muted); margin-bottom: 2rem; }
+    h2 { font-size: 1.25rem; color: var(--accent-light); margin: 2rem 0 1rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+    h2:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+    h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; }
+    p { margin-bottom: 1rem; color: var(--text-muted); }
+    ul { margin: 0 0 1rem 1.5rem; color: var(--text-muted); }
+    li { margin-bottom: 0.35rem; }
+    pre, code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    pre { padding: 1rem; overflow-x: auto; margin: 1rem 0; }
+    code { padding: 0.2rem 0.4rem; }
+    pre code { background: none; border: none; padding: 0; }
+    .flow-diagram { white-space: pre; font-size: 0.8rem; line-height: 1.3; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th, td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+    th { color: var(--accent-light); font-weight: 600; }
+    .callout { padding: 1rem; background: rgba(13, 148, 136, 0.1); border-left: 4px solid var(--accent); border-radius: 0 8px 8px 0; margin: 1rem 0; }
+    strong { color: var(--text); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <nav class="nav"><a href="/">← Back to Demo</a></nav>
+    <h1>How It Works</h1>
+    <p class="lead">Technical documentation for the MCP Auth flow — user login through JWT verification, context propagation, and downstream API calls.</p>
+
+    <h2>Overview</h2>
+    <p>The example demonstrates a complete auth flow for MCP servers:</p>
+    <pre class="flow-diagram">User login → OAuth (JWT issued)
+       ↓
+Agent receives JWT
+       ↓
+JWT passed to MCP server (Authorization: Bearer &lt;token&gt;)
+       ↓
+MCP verifies JWT + extracts roles
+       ↓
+Context attached to tool calls (AsyncLocalStorage)
+       ↓
+Downstream APIs use scoped tokens (same JWT forwarded)</pre>
+    <div class="callout">
+      <strong>Key design decisions:</strong>
+      <ul style="margin:0.5rem 0 0 1rem;">
+        <li><strong>Stateless JWT</strong> — No server-side sessions</li>
+        <li><strong>Same token, multiple services</strong> — Auth issues; MCP and downstream both validate</li>
+        <li><strong>AsyncLocalStorage</strong> — Propagates user context into async tool handlers</li>
+        <li><strong>Role-based access</strong> — Downstream API enforces permissions via <code>roles</code></li>
+      </ul>
+    </div>
+
+    <h2>Architecture</h2>
+    <pre class="flow-diagram">┌─────────────────┐     POST /login      ┌──────────────────┐
+│  User / Agent   │ ──────────────────► │  Auth Service    │
+└────────┬────────┘                      └────────┬─────────┘
+         │ JWT                                    │
+         ▼                                        ▼
+┌─────────────────┐     POST /mcp       ┌──────────────────┐
+│  Agent / UI     │ ──────────────────► │  MCP Server      │
+│  Bearer &lt;jwt&gt;  │                       │  Verify + tools  │
+└────────┬────────┘                       └────────┬─────────┘
+         │                                         │ Bearer &lt;jwt&gt;
+         │                                         ▼
+         └─────────────────────────────► ┌──────────────────┐
+                                          │  Downstream API   │
+                                          │  Role-based auth  │
+                                          └──────────────────┘</pre>
+    <h3>Port Assignments</h3>
+    <table>
+      <tr><th>Port</th><th>Service</th><th>Role</th></tr>
+      <tr><td>4000</td><td>Auth Service</td><td>Issues JWTs; mock OAuth</td></tr>
+      <tr><td>4001</td><td>MCP Server</td><td>Verifies JWT, exposes tools, forwards to downstream</td></tr>
+      <tr><td>4002</td><td>Downstream API</td><td>Validates JWT, enforces RBAC</td></tr>
+      <tr><td>4003</td><td>UI Server</td><td>Serves visualization; proxies API calls</td></tr>
+    </table>
+
+    <h2>Authentication Flow</h2>
+    <h3>Step 1: User Login</h3>
+    <p><code>POST /login</code> with <code>{"username","password"}</code> → returns JWT with <code>sub</code>, <code>roles</code>, <code>scope</code>.</p>
+    <h3>Step 2: Agent Stores JWT</h3>
+    <p>No session; token is kept client-side for subsequent requests.</p>
+    <h3>Step 3: JWT Passed to MCP</h3>
+    <p>Every MCP request includes <code>Authorization: Bearer &lt;token&gt;</code>.</p>
+    <h3>Step 4: MCP Verifies and Extracts Roles</h3>
+    <p>Middleware verifies signature, checks audience, parses <code>sub</code>, <code>roles</code>, <code>scope</code> into <code>req.user</code>.</p>
+    <h3>Step 5: Context Attached to Tool Calls</h3>
+    <p>Handler wraps execution in <code>runWithUser(userCtx, fn)</code> — sets AsyncLocalStorage. Tools call <code>getUserContext()</code> to access user.</p>
+    <h3>Step 6: Downstream APIs Use Scoped Tokens</h3>
+    <p>Tools forward the same JWT in <code>Authorization</code>; downstream API validates and checks roles (reader vs admin).</p>
+
+    <h2>Components</h2>
+    <h3>Auth Service</h3>
+    <p>Validates credentials, signs JWT with <code>sub</code>, <code>roles</code>, <code>scope</code>. Returns <code>{ access_token, token_type, expires_in }</code>.</p>
+    <h3>MCP Server</h3>
+    <p><code>jwtAuth</code> middleware → <code>runWithUser</code> → route JSON-RPC → tool handlers call <code>getUserContext()</code> to get user and <code>_token</code> for downstream calls.</p>
+    <h3>User Context (AsyncLocalStorage)</h3>
+    <p>Propagates user from HTTP request into async tool execution. Tool handlers read <code>getUserContext()</code> — same context set by <code>runWithUser</code>.</p>
+    <h3>Downstream API</h3>
+    <p>Validates JWT, enforces RBAC: <code>GET /data</code> (reader+), <code>POST /data</code> (admin only).</p>
+
+    <h2>Context Propagation</h2>
+    <pre class="flow-diagram">HTTP Request
+    ▼
+jwtAuth → req.user, req._rawToken
+    ▼
+runWithUser({ ...user, _token }, async () => {
+    ▼
+Parse JSON-RPC → tools/call
+    ▼
+handleToolsCall → getUserContext() → ctx._token
+    ▼
+fetch(downstream, { headers: { Authorization: "Bearer " + ctx._token } })</pre>
+
+    <h2>API Reference</h2>
+    <table>
+      <tr><th>Service</th><th>Endpoint</th><th>Auth</th></tr>
+      <tr><td>Auth</td><td>POST /login</td><td>—</td></tr>
+      <tr><td>MCP</td><td>POST /mcp</td><td>Bearer required</td></tr>
+      <tr><td>Downstream</td><td>GET /data</td><td>Bearer (reader+)</td></tr>
+      <tr><td>Downstream</td><td>POST /data</td><td>Bearer (admin)</td></tr>
+    </table>
+    <p><strong>MCP methods:</strong> <code>initialize</code>, <code>tools/list</code>, <code>tools/call</code></p>
+
+    <h2>Security (Production)</h2>
+    <ul>
+      <li>Use strong JWT_SECRET from environment</li>
+      <li>HTTPS for all services</li>
+      <li>Validate token audience</li>
+    </ul>
+
+    <h2>Demo Users</h2>
+    <table>
+      <tr><th>User</th><th>Roles</th><th>Access</th></tr>
+      <tr><td>alice</td><td>admin, reader</td><td>Full data</td></tr>
+      <tr><td>bob</td><td>reader</td><td>Reader data only</td></tr>
+      <tr><td>charlie</td><td>none</td><td>403 on /data</td></tr>
+    </table>
+
+    <p style="margin-top:2rem; padding-top:1rem; border-top:1px solid var(--border); color: var(--text-muted);">
+      Full documentation: <code>DOCUMENTATION.md</code> in the project root.
+    </p>
+  </div>
+</body>
+</html>
