@@ -4,6 +4,12 @@ End-to-end flow demonstrating JWT-based authentication for MCP servers.
 
 **[→ Full technical documentation (DOCUMENTATION.md)](./DOCUMENTATION.md)**
 
+## Screenshot
+
+Visualization UI (`npm run ui` → http://127.0.0.1:4003):
+
+![MCP Auth Flow visualization UI](docs/screenshot-ui.png)
+
 ```
 User login → OAuth
        ↓
